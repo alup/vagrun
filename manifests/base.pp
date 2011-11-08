@@ -10,5 +10,9 @@ file { '/etc/motd':
   group => 0,
 }
 
+$mysql_password = 'fatality'
+$user = 'vagrant'
+$global_ruby = '1.9.2-p290'
+
 # Include all the module here
-include curl, nginx, unicorn, git, rbenv
+include curl, nginx, git, rbenv, unicorn, mysql, htop

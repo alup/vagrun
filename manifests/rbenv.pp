@@ -2,10 +2,10 @@ class rbenv::install {
   # STEP 1
   exec { "checkout rbenv":
     command => "git clone git://github.com/sstephenson/rbenv.git .rbenv",
-    user    => "vagrant",
-    group   => "vagrant",
-    cwd     => "/home/vagrant",
-    creates => "/home/vagrant/.rbenv",
+    user    => $user,
+    group   => $user,
+    cwd     => "/home/${user}",
+    creates => "/home/${user}/.rbenv",
     path    => ["/usr/bin", "/usr/sbin"],
     timeout => 100,
     require => Class['git'],
@@ -13,33 +13,33 @@ class rbenv::install {
 
   # STEP 2
   exec { "configure rbenv path":
-    command => 'echo "export PATH=/home/vagrant/.rbenv/bin:\$PATH" >> .bashrc',
-    user    => "vagrant",
-    group   => "vagrant",
-    cwd     => "/home/vagrant",
-    onlyif  => "[ -f /home/vagrant/.bashrc ]", 
-    unless  => "grep .rbenv /home/vagrant/.bashrc 2>/dev/null",
+    command => 'echo "export PATH=/home/${user}/.rbenv/bin:\$PATH" >> .bashrc',
+    user    => $user,
+    group   => $user,
+    cwd     => "/home/${user}",
+    onlyif  => "[ -f /home/${user}/.bashrc ]", 
+    unless  => "grep .rbenv /home/${user}/.bashrc 2>/dev/null",
     path    => ["/bin", "/usr/bin", "/usr/sbin"],
   }
 
   # STEP 3
   exec { "configure rbenv init":
     command => 'echo "eval \"\$(rbenv init -)\"" >> .bashrc',
-    user    => "vagrant",
-    group   => "vagrant",
-    cwd     => "/home/vagrant",
-    onlyif  => "[ -f /home/vagrant/.bashrc ]", 
-    unless  => 'grep ".rbenv init -" /home/vagrant/.bashrc 2>/dev/null',
+    user    => $user,
+    group   => $user,
+    cwd     => "/home/${user}",
+    onlyif  => "[ -f /home/${user}/.bashrc ]", 
+    unless  => "grep '.rbenv init -' /home/${user}/.bashrc 2>/dev/null",
     path    => ["/bin", "/usr/bin", "/usr/sbin"],
   }
 
   # STEP 4
   exec { "checkout ruby-build":
     command => "git clone git://github.com/sstephenson/ruby-build.git",
-    user    => "vagrant",
-    group   => "vagrant",
-    cwd     => "/home/vagrant",
-    creates => "/home/vagrant/ruby-build",
+    user    => $user,
+    group   => $user,
+    cwd     => "/home/${user}",
+    creates => "/home/${user}/ruby-build",
     path    => ["/usr/bin", "/usr/sbin"],
     timeout => 100,
     require => Class['git'],
@@ -50,38 +50,48 @@ class rbenv::install {
     command => "sh install.sh",
     user    => "root",
     group   => "root",
-    cwd     => "/home/vagrant/ruby-build",
+    cwd     => "/home/${user}/ruby-build",
     onlyif  => '[ -z "$(which ruby-build)" ]', 
     path    => ["/bin", "/usr/local/bin", "/usr/bin", "/usr/sbin"],
     require => Exec['checkout ruby-build'],
   }
 
-  # STEP 6
   #
   # Set Timeout to disabled cause we need a lot of time to compile.
   # Use HOME variable and define PATH correctly.
-  exec { "install ruby 1.9.2-p290":
-    command     => "rbenv-install 1.9.2-p290",
+  exec { "install ruby ${global_ruby}":
+    command     => "rbenv-install ${global_ruby}",
     timeout     => 0,
-    user        => "vagrant",
-    group       => "vagrant",
-    cwd         => "/home/vagrant",
-    environment => [ "HOME=/home/vagrant" ],
-    onlyif      => '[ -n "$(which rbenv-install)" ] && ! [ -e /home/vagrant/.rbenv/versions/1.9.2-p290 ]', 
-    path        => ["home/vagrant/.rbenv/shims", "/home/vagrant/.rbenv/bin", "/bin", "/usr/local/bin", "/usr/bin", "/usr/sbin"],
+    user        => $user,
+    group       => $user,
+    cwd         => "/home/${user}",
+    environment => [ "HOME=/home/${user}" ],
+    onlyif      => ['[ -n "$(which rbenv-install)" ]', "[ ! -e /home/${user}/.rbenv/versions/${global_ruby} ]"], 
+    path        => ["home/${user}/.rbenv/shims", "/home/${user}/.rbenv/bin", "/bin", "/usr/local/bin", "/usr/bin", "/usr/sbin"],
     require     => [Class['curl'], Exec['install ruby-build']],
   }
 
-  # STEP 7
-  exec { "rehash rbenv":
+  exec { "rehash-rbenv":
     command     => "rbenv rehash",
-    user        => "vagrant",
-    group       => "vagrant",
-    cwd         => "/home/vagrant",
-    environment => [ "HOME=/home/vagrant" ],
+    user        => $user,
+    group       => $user,
+    cwd         => "/home/${user}",
+    environment => [ "HOME=/home/${user}" ],
     onlyif      => '[ -n "$(which rbenv)" ]', 
-    path        => ["home/vagrant/.rbenv/shims", "/home/vagrant/.rbenv/bin", "/bin", "/usr/local/bin", "/usr/bin", "/usr/sbin"],
-    require     => Exec['install ruby 1.9.2-p290'],
+    path        => ["home/${user}/.rbenv/shims", "/home/${user}/.rbenv/bin", "/bin", "/usr/local/bin", "/usr/bin", "/usr/sbin"],
+    require     => Exec["install ruby ${global_ruby}"],
+  }
+
+  exec { "set-global_ruby":
+    command     => "rbenv global ${global_ruby}",
+    user        => $user,
+    group       => $user,
+    cwd         => "/home/${user}",
+    environment => [ "HOME=/home/${user}" ],
+    onlyif      => '[ -n "$(which rbenv)" ]', 
+    unless      => "grep ${global_ruby} /home/${user}/.rbenv/version 2>/dev/null",
+    path        => ["home/${user}/.rbenv/shims", "/home/${user}/.rbenv/bin", "/bin", "/usr/local/bin", "/usr/bin", "/usr/sbin"],
+    require     => [Exec["install ruby ${global_ruby}"], Exec['rehash-rbenv']],
   }
 }
 
