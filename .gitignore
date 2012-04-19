@@ -1,2 +1,4 @@
 .rvmrc
+.rbenv-version
 .vagrant
+bin/
