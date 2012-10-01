@@ -20,15 +20,17 @@ if ! defined(Exec["apt-get update"]) {
   }
 }
 
-# Use rbenv for user vagrant
-class { "rbenv":
-  user    => "vagrant",
-  compile => true,
-  version => "1.9.3-p125",
+rbenv::install {'vagrant':
+  group    => 'users',
+  home => "/home/vagrant",
+}
+rbenv::compile {'1.9.3-p194':
+  user     => 'vagrant',
+  home => "/home/vagrant",
 }
 
 $mysql_password = 'fatality'
 $user = 'vagrant'
 
 # Include all the necessary modules here
-include nginx, mysql, htop
+include nginx, mysql, htop, unicorn

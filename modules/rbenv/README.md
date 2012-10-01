@@ -1,74 +1,164 @@
 # Puppet-Rbenv
 
 [![Build Status](https://secure.travis-ci.org/alup/puppet-rbenv.png?branch=master)](http://travis-ci.org/alup/puppet-rbenv)
+[![endorse](http://api.coderwall.com/alup/endorsecount.png)](http://coderwall.com/alup)
 
 ## About
 
-This project provides manifests for the installation of
+This project provides powerful manifests for the installation of
 [rbenv](https://github.com/sstephenson/rbenv) (Ruby Version Management).
+In a nutshell, it supports the following conveniences:
 
+* Defined resources for the installation of rbenvs for one or more users, shared or standalone.
+* Resources for the compilation of ruby interpreters (one or many, custom or predefined ruby build definitions), under specific rbenvs, users.
+* Tools for the installation of arbitrary gems under specific rbenvs.
+* Infrastructure to support rbenv plugins. We have already included [ruby-build](https://github.com/sstephenson/ruby-build) and [rbenv-vars](https://github.com/sstephenson/rbenv-vars) plugins.
+* Resource for handling `bundler`.
 
-## Install
-
-1. Install dependencies (Rubygems and Puppet):
-
-        sudo apt-get install rubygems puppet # Ubuntu/Debian
-
-2. Apply the catalog of chosen modules(serverless install):
-
-        puppet apply ...
-
-You can also download and install the module from puppet-forge via 
-```puppet-module``` by running:
-
-```shell
-puppet-module install alup/rbenv
-```
-
-## Usage
+## Rbenv installation
 
 You can use the module in your manifest with the following code:
 
-```puppet
-class { "rbenv":
-  user    => "alup",
-  compile => true,
-  version => 1.9.3-p125,
+```
+rbenv::install { "someuser":
+  group => 'project'
+  home  => '/project'
 }
 ```
 
-This will apply an rbenv installation under "alup" user home dir
-and will also compile ruby version 1.9.3-p125 to be ready for usage
-(It will also set it as the global rbenv version for this user).
+This will apply an rbenv installation under "someuser" home dir
+and place it into ".rbenv". You can change the resource title to
+your taste, and pass the user on which install rbenv using the
+`user` parameter.
 
-If you want only an rbenv installation without compiling any ruby
-version, then just set ```compile``` parameter to ```false``` (It
-defaults to ```true```).
+The rbenv directory can be changed by passing the "root" parameter,
+that must be an absolute path.
 
-All the variables except for the ```user```, are optional.
+## Ruby compilation
 
-## Dry-run
+To compile a ruby interpreter, you use `rbenv::compile` as follows:
 
-If you want to just simulate (or smoke test) the installation of the
-module, just clone the repository and use the following command:
-
-```shell
-sudo puppet apply --noop --modulepath=$PWD/../ tests/init.pp
+```
+rbenv::compile { "1.9.3-p194":
+  user => "someuser",
+  home => "/project",
+}
 ```
 
+The resource title is used as the ruby version, but if you have
+multiple rubies under multiple users, you'll have to define them
+explicitly:
 
-## Testing
+```
+rbenv::compile { "foo/1.8.7":
+  user => "foo",
+  ruby => "1.8.7-p370",
+}
 
-To run the tests, use ```bundle exec rake```. Before running the tests,
-you should have run ```bundle install``` to ensure all the dependencies
-have been met.
+rbenv::compile { "bar/1.8.7":
+  user => bar",
+  ruby => "1.8.7-p370",
+}
+```
+
+`rbenv rehash` is performed each time a new ruby or a new gem is
+installed.
+
+You can use the `global => true` parameter to set an interpreter as the
+default (`rbenv global`) one for the given user. Please note that only one global
+is allowed, duplicate resources will be defined if you specify
+multiple global ruby version.
+
+You can also provide a custom build definition to ruby-build by
+specifying a `source` that can either be a `puppet:` source or
+a file to be downloaded using `wget`:
+
+```
+rbenv::compile { "patched-ree":
+  user   => "someuser",
+  home   => "/project",
+  source => "puppet://path-to-definition"
+}
+```
+
+## Gem installation
+
+You can install and keep gems updated for a specific ruby interpreter:
+
+```
+rbenv::gem { "unicorn":
+  user => "foobarbaz",
+  ruby => "1.9.3-p194",
+}
+```
+
+Gems are handled using a custom Package provider that handles gems,
+somewhat inspired by Puppet's Package one - thus `absent` and `latest`
+work as expected.
+
+## rbenv plugins
+
+To add a plugin to a rbenv installation, you use `rbenv::plugin` as follows:
+
+```
+rbenv::plugin { "my-plugin":
+  user   => "someuser",
+  source => "git://github.com/user/my-plugin.git"
+}
+```
+
+There's also a built-in resource to add [rbenv-vars](https://github.com/sstephenson/rbenv-vars)
+for a user:
+
+```
+rbenv::plugin::rbenvvars { "someuser":
+  # Optional:
+  # source => "git://path-to-your/custom/rbenv-vars.git"
+}
+```
+
+*NOTICE: `rbenv::install` automatically requires [ruby-build](https://github.com/sstephenson/ruby-build)
+to compile rubies, if you want to use a different repository, you can specify
+the resource on a separate manifest:*
+
+```
+rbenv::plugin::rubybuild { "someuser":
+  source => "git://path-to-your/git/repo"
+}
+```
+
+## Usage with Vagrant
+
+A simple way to test this module is by using the
+[Vagrant](http://http://vagrantup.com/) library.
+
+An example of a Vagrantfile:
+
+```
+Vagrant::Config.run do |config|
+   config.vm.box = "lucid32"
+   config.vm.provision :puppet, :facter => { "osfamily" => "debian" }, :module_path => "modules" do |puppet|
+     puppet.manifests_path = "manifests"
+     puppet.manifest_file  = "base.pp"
+     puppet.options        = %w[ --libdir=\\$modulepath/rbenv/lib ]
+   end
+end
+```
+
+The `--libdir=\\$modulepath/rbenv/lib` argument is important to make
+puppet aware of the rbenvgem custom provider and type.
 
 
-## Todo
+## Supported Platforms
 
-Look at the TODO file.
-
+* CentOS
+* Debian
+* RHEL
+* SuSE
+* Ubuntu
 
 ## License
 
-MIT License. Copyright 2012 Andreas Loupasakis.
+MIT License.
+
+Copyright 2012 Andreas Loupasakis, Marcello Barnaba <vjt@openssl.it>

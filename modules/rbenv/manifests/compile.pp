@@ -1,42 +1,100 @@
-# The following part is optional! It just compiles and installs the chosen
-# global ruby version to help on bootstrapping. To achieve this, it uses
-# "ruby-build" utility.
-define rbenv::compile( $user, $ruby_version ) {
+# The following part compiles and installs the chosen ruby version,
+# using the "ruby-build" rbenv plugin.
+#
+define rbenv::compile(
+  $user,
+  $ruby   = $title,
+  $group  = $user,
+  $home   = '',
+  $root   = '',
+  $source = '',
+  $global = false
+) {
+
+  # Workaround http://projects.puppetlabs.com/issues/9848
+  $home_path = $home ? { '' => "/home/${user}", default => $home }
+  $root_path = $root ? { '' => "${home_path}/.rbenv", default => $root }
+
+  $bin         = "${root_path}/bin"
+  $shims       = "${root_path}/shims"
+  $versions    = "${root_path}/versions"
+  $global_path = "${root_path}/version"
+  $path        = [ $shims, $bin, '/bin', '/usr/bin' ]
+
+  if ! defined( Class['rbenv::dependencies'] ) {
+    require rbenv::dependencies
+  }
+
+  # If no ruby-build has been specified and the default resource hasn't been
+  # parsed
+  $custom_or_default = Rbenv::Plugin["rbenv::plugin::rubybuild::${user}"]
+  $default           = Rbenv::Plugin::Rubybuild["rbenv::rubybuild::${user}"]
+  if ! defined($custom_or_default) and ! defined($default) {
+    debug("No ruby-build found for ${user}, going to add the default one")
+    rbenv::plugin::rubybuild { "rbenv::rubybuild::${user}":
+      user   => $user,
+      group  => $group,
+      home   => $home,
+      root   => $root
+    }
+  }
+
+  if $source {
+    rbenv::definition { "rbenv::definition ${user} ${ruby}":
+      user    => $user,
+      group   => $group,
+      source  => $source,
+      ruby    => $ruby,
+      home    => $home,
+      root    => $root,
+      require => Rbenv::Plugin["rbenv::plugin::rubybuild::${user}"],
+      before  => Exec["rbenv::compile ${user} ${ruby}"]
+    }
+  }
 
   # Set Timeout to disabled cause we need a lot of time to compile.
   # Use HOME variable and define PATH correctly.
-  exec { "install ruby ${ruby_version}":
-    command     => "rbenv-install ${ruby_version}",
+  exec { "rbenv::compile ${user} ${ruby}":
+    command     => "rbenv install ${ruby} && touch ${root_path}/.rehash",
     timeout     => 0,
     user        => $user,
-    group       => $user,
-    cwd         => "/home/${user}",
-    environment => [ "HOME=/home/${user}" ],
-    onlyif      => ['[ -n "$(which rbenv-install)" ]', "[ ! -e /home/${user}/.rbenv/versions/${ruby_version} ]"],
-    path        => ["home/${user}/.rbenv/shims", "/home/${user}/.rbenv/bin", "/bin", "/usr/local/bin", "/usr/bin", "/usr/sbin"],
-    require     => [Package['curl'], Exec['install ruby-build']],
+    group       => $group,
+    cwd         => $home_path,
+    environment => [ "HOME=${home_path}" ],
+    creates     => "${versions}/${ruby}",
+    path        => $path,
+    require     => Rbenv::Plugin["rbenv::plugin::rubybuild::${user}"],
+    before      => Exec["rbenv::rehash ${user} ${ruby}"],
   }
 
-  exec { "rehash-rbenv":
-    command     => "rbenv rehash",
+  exec { "rbenv::rehash ${user} ${ruby}":
+    command     => "rbenv rehash && rm -f ${root_path}/.rehash",
     user        => $user,
-    group       => $user,
-    cwd         => "/home/${user}",
-    environment => [ "HOME=/home/${user}" ],
-    onlyif      => '[ -n "$(which rbenv)" ]',
-    path        => ["home/${user}/.rbenv/shims", "/home/${user}/.rbenv/bin", "/bin", "/usr/local/bin", "/usr/bin", "/usr/sbin"],
-    require     => Exec["install ruby ${ruby_version}"],
+    group       => $group,
+    cwd         => $home_path,
+    onlyif      => "[ -e '${root_path}/.rehash' ]",
+    environment => [ "HOME=${home_path}" ],
+    path        => $path,
   }
 
-  exec { "set-ruby_version":
-    command     => "rbenv global ${ruby_version}",
-    user        => $user,
-    group       => $user,
-    cwd         => "/home/${user}",
-    environment => [ "HOME=/home/${user}" ],
-    onlyif      => '[ -n "$(which rbenv)" ]',
-    unless      => "grep ${ruby_version} /home/${user}/.rbenv/version 2>/dev/null",
-    path        => ["home/${user}/.rbenv/shims", "/home/${user}/.rbenv/bin", "/bin", "/usr/local/bin", "/usr/bin", "/usr/sbin"],
-    require     => [Exec["install ruby ${ruby_version}"], Exec['rehash-rbenv']],
+  # Install bundler
+  #
+  rbenv::gem {"rbenv::bundler ${user} ${ruby}":
+    user   => $user,
+    ruby   => $ruby,
+    gem    => 'bundler',
+    home   => $home_path,
+    root   => $root_path,
+  }
+
+  # Set default global ruby version for rbenv, if requested
+  #
+  if $global {
+    file { "rbenv::global ${user}":
+      path    => $global_path,
+      content => "$ruby\n",
+      owner   => $user,
+      group   => $group,
+    }
   }
 }

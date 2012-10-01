@@ -1,8 +1,8 @@
 class unicorn::install {
-  package { "unicorn":
-      ensure   => 'present',
-      provider => 'gem',
-      require  => Class['rbenv'],
+  rbenv::gem {"rbenv::unicorn vagrant 1.9.3-p194":
+    user   => 'vagrant',
+    ruby   => '1.9.3-p194',
+    gem    => 'unicorn',
   }
 }
 

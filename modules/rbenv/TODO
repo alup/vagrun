@@ -1,8 +1,10 @@
 * Provide option for system level setup
-* Remove hardcoded paths etc.
-* Provide instruction on how to use it
-* Provide Vagrant integration instruction.
-* Decouple ruby-build etc.
 * Make global ruby installation optional
-* Testing, testing, testing ...
-* Remove deprecated stuff
+* Provide Vagrant integration instruction.
+
+* Allow multiple user installations. ✔
+* Remove hardcoded paths etc. ✔
+* Provide instruction on how to use it ✔
+* Decouple ruby-build etc. ✔
+* Testing, testing, testing ... ✔
+* Remove deprecated stuff ✔
